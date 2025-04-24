@@ -1,0 +1,78 @@
+resource "aws_s3_bucket" "ml_models" {
+  bucket = var.s3_bucket_name
+  acl    = "private"
+
+  versioning {
+    enabled = true
+  }
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm = "AES256"
+      }
+    }
+  }
+
+  lifecycle_rule {
+    id      = "model-versioning"
+    enabled = true
+
+    transition {
+      days          = 30
+      storage_class = "STANDARD_IA"
+    }
+
+    transition {
+      days          = 90
+      storage_class = "GLACIER"
+    }
+  }
+}
+
+resource "aws_sagemaker_notebook_instance" "gis_ml" {
+  name          = "${var.environment}-gis-ml-notebook"
+  role_arn      = aws_iam_role.sagemaker_exec.arn
+  instance_type = "ml.t2.medium"
+
+  subnet_id               = var.private_subnet_ids[0]
+  security_group_ids      = var.security_group_ids
+  direct_internet_access  = "Disabled"
+
+  lifecycle_config_name = aws_sagemaker_notebook_instance_lifecycle_config.gis_ml.name
+
+  tags = {
+    Name = "${var.environment}-gis-ml-notebook"
+  }
+}
+
+resource "aws_sagemaker_endpoint" "predictive_maintenance" {
+  name                 = "${var.environment}-predictive-maintenance-endpoint"
+  endpoint_config_name = aws_sagemaker_endpoint_config.predictive_maintenance.name
+}
+
+resource "aws_sagemaker_endpoint_config" "predictive_maintenance" {
+  name = "${var.environment}-predictive-maintenance-config"
+
+  production_variants {
+    variant_name           = "primary"
+    model_name             = aws_sagemaker_model.predictive_maintenance.name
+    initial_instance_count = 1
+    instance_type          = "ml.m5.large"
+  }
+}
+
+resource "aws_sagemaker_model" "predictive_maintenance" {
+  name               = "${var.environment}-predictive-maintenance-model"
+  execution_role_arn = aws_iam_role.sagemaker_exec.arn
+
+  primary_container {
+    image          = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/predictive-maintenance:latest"
+    model_data_url = "s3://${aws_s3_bucket.ml_models.bucket}/predictive-maintenance/model.tar.gz"
+  }
+
+  vpc_config {
+    subnets            = var.private_subnet_ids
+    security_group_ids = var.security_group_ids
+  }
+}
