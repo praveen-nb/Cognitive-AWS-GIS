@@ -1,0 +1,43 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Base infrastructure for Cognitive Grid Evolution
+
+Parameters:
+  EnvironmentName:
+    Description: Environment name (dev/stage/prod)
+    Type: String
+    Default: dev
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-grid-vpc
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-public-subnet-1
+
+  # Additional networking resources would go here
+
+  GISEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0abcdef1234567890 # Replace with your AMI
+      InstanceType: t3.large
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-gis-server
+
+  # Additional resources would include RDS, S3 buckets, etc.
