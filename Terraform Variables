@@ -39,3 +39,4 @@ variable "gis_instance_type" {
   type        = string
   default     = "t3.large"
 }
+######### end of script
